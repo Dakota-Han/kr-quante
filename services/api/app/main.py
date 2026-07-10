@@ -6,6 +6,7 @@ from typing import Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from kr_core.market_data import normalize_kiwoom_quote
 from kr_core.orders import OrderBlocked, OrderConfig, create_order_preview, validate_order_submission
 from kr_core.risk import RiskConfig
 from kr_core.strategy import evaluate_candidates
@@ -128,6 +129,33 @@ async def kiwoom_quote(code: str) -> Dict:
         settings.kiwoom_secret_key,
     )
     return await client.quote(code)
+
+
+@app.get("/market/quote/{code}")
+async def market_quote(code: str) -> Dict:
+    client = build_kiwoom_client(
+        settings.kiwoom_mode,
+        settings.kiwoom_base_url,
+        settings.kiwoom_app_key,
+        settings.kiwoom_secret_key,
+    )
+    raw = await client.quote(code)
+    return asdict(normalize_kiwoom_quote(code, raw))
+
+
+@app.get("/market/quotes")
+async def market_quotes() -> Dict:
+    client = build_kiwoom_client(
+        settings.kiwoom_mode,
+        settings.kiwoom_base_url,
+        settings.kiwoom_app_key,
+        settings.kiwoom_secret_key,
+    )
+    quotes = []
+    for code in ETF_TARGETS:
+        raw = await client.quote(code)
+        quotes.append(asdict(normalize_kiwoom_quote(code, raw)))
+    return {"quotes": quotes}
 
 
 @app.get("/kiwoom/token/check")

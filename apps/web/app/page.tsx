@@ -1,31 +1,58 @@
-const decisions = [
-  {
-    code: "069500",
-    name: "KODEX 200",
-    fairGap: "0.55%",
-    actualGap: "0.32%",
-    score: "0.82",
-    state: "Watch"
-  },
-  {
-    code: "091160",
-    name: "KODEX 반도체",
-    fairGap: "1.28%",
-    actualGap: "0.66%",
-    score: "1.74",
-    state: "Selected"
-  },
-  {
-    code: "305720",
-    name: "KODEX 2차전지산업",
-    fairGap: "0.81%",
-    actualGap: "0.31%",
-    score: "0.94",
-    state: "Filtered"
-  }
-];
+type Decision = {
+  code: string;
+  name: string;
+  fair_gap: number;
+  actual_gap: number;
+  gap_residual: number;
+  gap_residual_z: number;
+  score: number;
+  selected: boolean;
+  no_trade_reasons: string[];
+};
 
-export default function Dashboard() {
+type Quote = {
+  code: string;
+  name: string;
+  bid: number;
+  ask: number;
+  bid_size: number;
+  ask_size: number;
+  mid: number;
+  spread: number;
+  spread_bps: number;
+  timestamp: string;
+};
+
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+async function fetchJson<T>(path: string, fallback: T): Promise<T> {
+  try {
+    const response = await fetch(`${apiBase}${path}`, { cache: "no-store" });
+    if (!response.ok) {
+      return fallback;
+    }
+    return (await response.json()) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function pct(value: number) {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function won(value: number) {
+  return new Intl.NumberFormat("ko-KR").format(Math.round(value));
+}
+
+export default async function Dashboard() {
+  const strategy = await fetchJson<{ decisions: Decision[]; selected: Decision[] }>(
+    "/strategy/today",
+    { decisions: [], selected: [] }
+  );
+  const market = await fetchJson<{ quotes: Quote[] }>("/market/quotes", { quotes: [] });
+  const selected = strategy.selected[0];
+
   return (
     <main>
       <header className="topbar">
@@ -33,7 +60,7 @@ export default function Dashboard() {
           <p>kr-quante</p>
           <h1>Korea Overnight Lead-Lag</h1>
         </div>
-        <span className="mode">Mock mode</span>
+        <span className="mode">Live data, orders blocked</span>
       </header>
 
       <section className="summary">
@@ -53,16 +80,16 @@ export default function Dashboard() {
           <small>Flat by close</small>
         </div>
         <div>
-          <span>Risk</span>
-          <strong>0.30%</strong>
-          <small>Per-trade loss budget</small>
+          <span>Selected</span>
+          <strong>{selected ? selected.code : "No Trade"}</strong>
+          <small>{selected ? selected.name : "filters did not pass"}</small>
         </div>
       </section>
 
       <section className="panel">
         <div className="section-head">
           <h2>Today Candidates</h2>
-          <span>sample data</span>
+          <span>API: {apiBase}</span>
         </div>
         <table>
           <thead>
@@ -71,21 +98,59 @@ export default function Dashboard() {
               <th>Name</th>
               <th>Fair Gap</th>
               <th>Actual Gap</th>
+              <th>Residual</th>
               <th>Score</th>
               <th>State</th>
             </tr>
           </thead>
           <tbody>
-            {decisions.map((row) => (
-              <tr key={row.code}>
-                <td>{row.code}</td>
-                <td>{row.name}</td>
-                <td>{row.fairGap}</td>
-                <td>{row.actualGap}</td>
-                <td>{row.score}</td>
-                <td>
-                  <span className={row.state === "Selected" ? "badge selected" : "badge"}>{row.state}</span>
-                </td>
+            {strategy.decisions.map((row) => {
+              const state = row.selected ? "Selected" : row.no_trade_reasons.length ? "Filtered" : "Watch";
+              return (
+                <tr key={row.code}>
+                  <td>{row.code}</td>
+                  <td>{row.name}</td>
+                  <td>{pct(row.fair_gap)}</td>
+                  <td>{pct(row.actual_gap)}</td>
+                  <td>{pct(row.gap_residual)}</td>
+                  <td>{row.score.toFixed(2)}</td>
+                  <td>
+                    <span className={row.selected ? "badge selected" : "badge"}>{state}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel market">
+        <div className="section-head">
+          <h2>Kiwoom Quotes</h2>
+          <span>best bid/ask</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Bid</th>
+              <th>Ask</th>
+              <th>Spread</th>
+              <th>Spread bps</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {market.quotes.map((quote) => (
+              <tr key={quote.code}>
+                <td>{quote.code}</td>
+                <td>{quote.name}</td>
+                <td>{won(quote.bid)}</td>
+                <td>{won(quote.ask)}</td>
+                <td>{won(quote.spread)}</td>
+                <td>{quote.spread_bps.toFixed(2)}</td>
+                <td>{quote.timestamp || "-"}</td>
               </tr>
             ))}
           </tbody>

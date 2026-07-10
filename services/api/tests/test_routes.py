@@ -20,6 +20,9 @@ class ApiTests(unittest.TestCase):
         response = self.client.get("/strategy/today")
         self.assertEqual(response.status_code, 200)
         self.assertIn("decisions", response.json())
+        quote_response = self.client.get("/market/quote/091160")
+        self.assertEqual(quote_response.status_code, 200)
+        self.assertIn("spread_bps", quote_response.json())
 
     def test_preview_and_guarded_submit(self):
         preview_response = self.client.post("/orders/preview", json={"account_equity": 10000000})

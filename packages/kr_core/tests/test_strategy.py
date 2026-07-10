@@ -6,11 +6,32 @@ ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(ROOT))
 
 from kr_core.models import FairGapInput, MarketQuality, OpeningSnapshot  # noqa: E402
+from kr_core.market_data import normalize_kiwoom_quote, parse_kiwoom_int  # noqa: E402
 from kr_core.orders import OrderBlocked, OrderConfig, create_order_preview, validate_order_submission  # noqa: E402
 from kr_core.strategy import compute_fair_gap, evaluate_candidates  # noqa: E402
 
 
 class StrategyTests(unittest.TestCase):
+    def test_kiwoom_quote_normalization(self):
+        self.assertEqual(parse_kiwoom_int("+149620"), 149620)
+        self.assertEqual(parse_kiwoom_int("-12,345"), 12345)
+        quote = normalize_kiwoom_quote(
+            "091160",
+            {
+                "bid_req_base_tm": "125829",
+                "sel_fpr_bid": "+45620",
+                "sel_fpr_req": "30",
+                "buy_fpr_bid": "+45600",
+                "buy_fpr_req": "40",
+                "return_code": 0,
+                "return_msg": "정상",
+            },
+        )
+        self.assertEqual(quote.ask, 45620)
+        self.assertEqual(quote.bid, 45600)
+        self.assertEqual(quote.spread, 20)
+        self.assertGreater(quote.spread_bps, 0)
+
     def test_fair_gap_is_positive_for_strong_semiconductor_signal(self):
         fair_gap = compute_fair_gap(
             FairGapInput(
