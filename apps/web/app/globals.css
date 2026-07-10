@@ -244,6 +244,58 @@ td {
   margin: 12px 0;
 }
 
+.auto-panel {
+  margin: 12px 0;
+}
+
+.auto-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.auto-card {
+  min-height: 92px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.auto-card span,
+.auto-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.auto-card strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.auto-settings {
+  margin-top: 12px;
+}
+
+.auto-settings label {
+  align-content: end;
+}
+
+.log-table {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.log-table h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
 .trade-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -361,6 +413,7 @@ li {
 
   .summary,
   .grid,
+  .auto-grid,
   .trade-grid {
     grid-template-columns: 1fr;
   }

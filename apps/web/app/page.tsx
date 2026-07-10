@@ -1,4 +1,5 @@
 import AutoRefresh from "./AutoRefresh";
+import AutoTradePanel, { type AutoStatusPayload } from "./AutoTradePanel";
 import OrderPanel from "./OrderPanel";
 
 type Decision = {
@@ -166,6 +167,7 @@ export default async function Dashboard() {
   );
   const market = await fetchJson<{ quotes: Quote[] }>("/market/quotes", { quotes: [] });
   const health = await fetchJson<HealthPayload>("/health", {});
+  const auto = await fetchJson<AutoStatusPayload>("/auto/status", {});
   const selected = strategy.selected[0];
   const warningCount = strategy.warnings?.length || 0;
   const liveTradingText = health.live_enabled ? "실주문 허용" : "실주문 차단";
@@ -210,6 +212,8 @@ export default async function Dashboard() {
           <small>{warningCount ? `경고 ${warningCount}건` : `계산 ${formatGeneratedAt(strategy.generated_at)}`}</small>
         </div>
       </section>
+
+      <AutoTradePanel apiBase={apiBase} initialStatus={auto} />
 
       <OrderPanel apiBase={apiBase} liveEnabled={Boolean(health.live_enabled)} />
 

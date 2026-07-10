@@ -96,6 +96,39 @@ ALLOW_LIVE_TRADING=true
 Do not run unattended automation until fills, position reconciliation, cancel
 handling, and forced EOD exit are implemented.
 
+## Auto Trading
+
+The dashboard includes an automatic trading panel.
+
+Default behavior:
+
+- Auto trading is off until enabled in the UI.
+- The default daily budget is `10,000 KRW`.
+- The engine checks the clock every `5` seconds.
+- Buy automation runs only during `09:06-09:12` KST.
+- End-of-day exit automation runs only during `14:50-15:10` KST.
+- Only limit orders are sent.
+- Only one automatic buy candidate is allowed per day.
+- If the daily budget is below one ETF share, no order is sent and the reason
+  is written to the log.
+- Live orders are still blocked unless `ALLOW_LIVE_TRADING=true`.
+
+API endpoints:
+
+```text
+GET  /auto/status
+GET  /auto/logs
+POST /auto/settings
+POST /auto/tick
+```
+
+Auto-trading state and audit logs are stored locally in
+`work/auto_trader_state.json`, which is ignored by Git.
+
+Current PnL shown in the dashboard is order-price based until Kiwoom fill and
+position reconciliation are added. Treat it as an operational estimate, not a
+confirmed brokerage statement.
+
 ## Disclaimer
 
 This is trading infrastructure and research code, not financial advice.

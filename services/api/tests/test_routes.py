@@ -43,6 +43,21 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(submit.status_code, 403)
 
+    def test_auto_status_and_settings(self):
+        status = self.client.get("/auto/status")
+        self.assertEqual(status.status_code, 200)
+        self.assertIn("settings", status.json())
+
+        update = self.client.post("/auto/settings", json={"enabled": False, "daily_budget_krw": 10000})
+        self.assertEqual(update.status_code, 200)
+        payload = update.json()
+        self.assertFalse(payload["settings"]["enabled"])
+        self.assertEqual(payload["settings"]["daily_budget_krw"], 10000)
+
+        tick = self.client.post("/auto/tick")
+        self.assertEqual(tick.status_code, 200)
+        self.assertIn(tick.json()["status"], {"disabled", "waiting", "no_trade", "blocked", "skipped", "submitted"})
+
 
 if __name__ == "__main__":
     unittest.main()

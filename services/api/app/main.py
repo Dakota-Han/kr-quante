@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .auto_trader import AutoTradeStore, AutoTrader
 from kr_core.market_data import normalize_kiwoom_quote
 from kr_core.models import StrategyDecision
 from kr_core.orders import OrderBlocked, OrderConfig, create_order_preview, validate_order_submission
@@ -47,12 +48,49 @@ class SellLimitRequest(BaseModel):
     approved_by: str = ""
 
 
+class AutoSettingsRequest(BaseModel):
+    enabled: Optional[bool] = None
+    daily_budget_krw: Optional[int] = Field(default=None, ge=0)
+
+
+auto_store = AutoTradeStore()
+auto_trader: Optional[AutoTrader] = None
+
+
+def build_auto_trader() -> AutoTrader:
+    return AutoTrader(
+        auto_store,
+        strategy_payload,
+        strategy_client,
+        mode=settings.kiwoom_mode,
+        account_no=settings.kiwoom_account_no,
+        allow_live_trading=settings.allow_live_trading,
+        disallow_market_orders=settings.disallow_market_orders,
+        poll_seconds=settings.auto_trader_poll_seconds,
+    )
+
+
+@app.on_event("startup")
+async def startup_auto_trader() -> None:
+    global auto_trader
+    auto_trader = build_auto_trader()
+    if settings.auto_trader_background:
+        auto_trader.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_auto_trader() -> None:
+    if auto_trader:
+        await auto_trader.stop()
+
+
 @app.get("/health")
 def health() -> Dict:
     return {
         "status": "ok",
         "mode": settings.kiwoom_mode,
         "live_enabled": settings.allow_live_trading,
+        "auto_background": settings.auto_trader_background,
         "targets": list(ETF_TARGETS.keys()),
     }
 
@@ -205,6 +243,38 @@ async def orders_sell_limit(payload: SellLimitRequest) -> Dict:
         account_no=settings.kiwoom_account_no,
     )
     return {"status": "submitted", "kiwoom": response}
+
+
+def get_auto_trader() -> AutoTrader:
+    global auto_trader
+    if auto_trader is None:
+        auto_trader = build_auto_trader()
+    return auto_trader
+
+
+@app.get("/auto/status")
+async def auto_status() -> Dict:
+    return await get_auto_trader().status()
+
+
+@app.get("/auto/logs")
+async def auto_logs(limit: int = 100) -> Dict:
+    return await get_auto_trader().logs(limit=limit)
+
+
+@app.post("/auto/settings")
+async def auto_settings(payload: AutoSettingsRequest) -> Dict:
+    if payload.enabled is None and payload.daily_budget_krw is None:
+        raise HTTPException(status_code=400, detail="no settings provided")
+    return await get_auto_trader().update_settings(
+        enabled=payload.enabled,
+        daily_budget_krw=payload.daily_budget_krw,
+    )
+
+
+@app.post("/auto/tick")
+async def auto_tick() -> Dict:
+    return await get_auto_trader().tick(triggered_by="manual")
 
 
 @app.get("/kiwoom/quote/{code}")

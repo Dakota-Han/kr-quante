@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     require_manual_approval: bool = True
     disallow_market_orders: bool = True
     risk_per_trade: float = 0.003
+    auto_trader_background: bool = True
+    auto_trader_poll_seconds: int = 5
 
 
 settings = Settings()
