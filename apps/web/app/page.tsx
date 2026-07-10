@@ -25,6 +25,29 @@ type Quote = {
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+const koreanNames: Record<string, string> = {
+  "069500": "KODEX 200",
+  "091160": "KODEX 반도체",
+  "305720": "KODEX 2차전지산업"
+};
+
+const reasonLabels: Record<string, string> = {
+  "data quality check failed": "데이터 품질 확인 실패",
+  "fair_gap <= 0": "해외 선행 신호 약함",
+  "actual_gap >= fair_gap": "시초가에 이미 반영됨",
+  "gap_residual below minimum": "남은 괴리 부족",
+  "gap_residual_z below threshold": "통계적 괴리 강도 부족",
+  "overseas theme signal too weak": "해외 테마 신호 약함",
+  "score below threshold": "종합 점수 미달",
+  "first five minute return negative": "장초반 흐름 약세",
+  "price broke down after open": "시초가 이후 하락",
+  "price below five minute VWAP": "5분 VWAP 하회",
+  "spread wider than normal": "호가 스프레드 확대",
+  "ETF premium too high": "ETF 괴리율 부담",
+  "simultaneous VIX and USD/KRW stress": "VIX와 환율 동시 스트레스",
+  "missing opening snapshot": "장초반 데이터 없음"
+};
+
 async function fetchJson<T>(path: string, fallback: T): Promise<T> {
   try {
     const response = await fetch(`${apiBase}${path}`, { cache: "no-store" });
@@ -45,6 +68,40 @@ function won(value: number) {
   return new Intl.NumberFormat("ko-KR").format(Math.round(value));
 }
 
+function displayName(code: string, fallback: string) {
+  return koreanNames[code] || fallback;
+}
+
+function stateLabel(row: Decision) {
+  if (row.selected) {
+    return "매수 후보";
+  }
+  return row.no_trade_reasons.length ? "필터 탈락" : "관찰";
+}
+
+function stateClass(row: Decision) {
+  if (row.selected) {
+    return "badge selected";
+  }
+  return row.no_trade_reasons.length ? "badge filtered" : "badge watch";
+}
+
+function primaryReason(row: Decision) {
+  if (row.selected) {
+    return "조건 통과";
+  }
+  const reason = row.no_trade_reasons[0];
+  return reason ? reasonLabels[reason] || reason : "추가 확인";
+}
+
+function formatKiwoomTime(value: string) {
+  if (!value || value.length < 6) {
+    return "-";
+  }
+  const time = value.padStart(6, "0");
+  return `${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}`;
+}
+
 export default async function Dashboard() {
   const strategy = await fetchJson<{ decisions: Decision[]; selected: Decision[] }>(
     "/strategy/today",
@@ -57,123 +114,138 @@ export default async function Dashboard() {
     <main>
       <header className="topbar">
         <div>
-          <p>kr-quante</p>
-          <h1>Korea Overnight Lead-Lag</h1>
+          <p>kr-quante 운영 대시보드</p>
+          <h1>국내 ETF 오버나이트 리드-래그</h1>
         </div>
-        <span className="mode">Live data, orders blocked</span>
+        <span className="mode">실시간 시세 연결 · 실거래 차단</span>
       </header>
 
       <section className="summary">
         <div>
-          <span>Strategy</span>
+          <span>전략</span>
           <strong>3 ETF v3</strong>
-          <small>Only one trade per day</small>
+          <small>하루 최대 1회 진입</small>
         </div>
         <div>
-          <span>Entry</span>
+          <span>진입 시간</span>
           <strong>09:06-09:12</strong>
-          <small>Limit order only</small>
+          <small>지정가 주문만 허용</small>
         </div>
         <div>
-          <span>Exit</span>
+          <span>청산 시간</span>
           <strong>14:50-15:10</strong>
-          <small>Flat by close</small>
+          <small>당일 포지션 종료</small>
         </div>
         <div>
-          <span>Selected</span>
-          <strong>{selected ? selected.code : "No Trade"}</strong>
-          <small>{selected ? selected.name : "filters did not pass"}</small>
+          <span>오늘 판단</span>
+          <strong>{selected ? selected.code : "거래 없음"}</strong>
+          <small>{selected ? displayName(selected.code, selected.name) : "필터 조건 대기"}</small>
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel candidates">
         <div className="section-head">
-          <h2>Today Candidates</h2>
+          <h2>오늘 매매 후보</h2>
           <span>API: {apiBase}</span>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Fair Gap</th>
-              <th>Actual Gap</th>
-              <th>Residual</th>
-              <th>Score</th>
-              <th>State</th>
-            </tr>
-          </thead>
-          <tbody>
-            {strategy.decisions.map((row) => {
-              const state = row.selected ? "Selected" : row.no_trade_reasons.length ? "Filtered" : "Watch";
-              return (
-                <tr key={row.code}>
-                  <td>{row.code}</td>
-                  <td>{row.name}</td>
-                  <td>{pct(row.fair_gap)}</td>
-                  <td>{pct(row.actual_gap)}</td>
-                  <td>{pct(row.gap_residual)}</td>
-                  <td>{row.score.toFixed(2)}</td>
-                  <td>
-                    <span className={row.selected ? "badge selected" : "badge"}>{state}</span>
-                  </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목코드</th>
+                <th>종목명</th>
+                <th className="number optional">예상 괴리</th>
+                <th className="number optional">시초 괴리</th>
+                <th className="number">남은 괴리</th>
+                <th className="number">점수</th>
+                <th>판단</th>
+                <th>주요 사유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {strategy.decisions.length ? (
+                strategy.decisions.map((row) => (
+                  <tr key={row.code}>
+                    <td>{row.code}</td>
+                    <td>{displayName(row.code, row.name)}</td>
+                    <td className="number optional">{pct(row.fair_gap)}</td>
+                    <td className="number optional">{pct(row.actual_gap)}</td>
+                    <td className="number">{pct(row.gap_residual)}</td>
+                    <td className="number">{row.score.toFixed(2)}</td>
+                    <td>
+                      <span className={stateClass(row)}>{stateLabel(row)}</span>
+                    </td>
+                    <td>{primaryReason(row)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8}>전략 데이터를 불러오지 못했습니다.</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="panel market">
         <div className="section-head">
-          <h2>Kiwoom Quotes</h2>
-          <span>best bid/ask</span>
+          <h2>키움 실시간 호가</h2>
+          <span>최우선 매수·매도 호가</span>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Bid</th>
-              <th>Ask</th>
-              <th>Spread</th>
-              <th>Spread bps</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {market.quotes.map((quote) => (
-              <tr key={quote.code}>
-                <td>{quote.code}</td>
-                <td>{quote.name}</td>
-                <td>{won(quote.bid)}</td>
-                <td>{won(quote.ask)}</td>
-                <td>{won(quote.spread)}</td>
-                <td>{quote.spread_bps.toFixed(2)}</td>
-                <td>{quote.timestamp || "-"}</td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목코드</th>
+                <th>종목명</th>
+                <th className="number">매수호가</th>
+                <th className="number">매도호가</th>
+                <th className="number">스프레드</th>
+                <th className="number optional">스프레드(bp)</th>
+                <th className="optional">시간</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {market.quotes.length ? (
+                market.quotes.map((quote) => (
+                  <tr key={quote.code}>
+                    <td>{quote.code}</td>
+                    <td>{displayName(quote.code, quote.name)}</td>
+                    <td className="number">{won(quote.bid)}</td>
+                    <td className="number">{won(quote.ask)}</td>
+                    <td className="number">{won(quote.spread)}</td>
+                    <td className="number optional">{quote.spread_bps.toFixed(2)}</td>
+                    <td className="optional">{formatKiwoomTime(quote.timestamp)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7}>키움 시세를 불러오지 못했습니다.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="grid">
         <div className="panel">
-          <h2>No Trade Filters</h2>
+          <h2>거래 안 하는 조건</h2>
           <ul>
-            <li>actual_gap must be below fair_gap</li>
-            <li>09:00-09:05 return must be non-negative</li>
-            <li>spread and ETF premium must be normal</li>
-            <li>VIX and USD/KRW stress cannot happen together</li>
+            <li>시초가가 이미 예상 상승분을 대부분 반영하면 진입하지 않음</li>
+            <li>09:00-09:05 흐름이 음수면 장초반 매수세 부족으로 판단</li>
+            <li>호가 스프레드와 ETF 괴리율이 평소보다 크면 제외</li>
+            <li>VIX와 원/달러가 동시에 스트레스 구간이면 신규 진입 중단</li>
           </ul>
         </div>
         <div className="panel">
-          <h2>Order Policy</h2>
+          <h2>주문 안전장치</h2>
           <ul>
-            <li>Market orders are blocked</li>
-            <li>Manual approval is required</li>
-            <li>Unfilled entries are cancelled by 09:12</li>
-            <li>No chasing after a missed fill</li>
+            <li>시장가 주문은 차단</li>
+            <li>사용자 승인 없이는 실주문 불가</li>
+            <li>09:12까지 미체결이면 주문 취소</li>
+            <li>놓친 체결을 따라가서 추격 매수하지 않음</li>
           </ul>
         </div>
       </section>
