@@ -7,14 +7,15 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from kr_core.market_data import normalize_kiwoom_quote
+from kr_core.models import StrategyDecision
 from kr_core.orders import OrderBlocked, OrderConfig, create_order_preview, validate_order_submission
 from kr_core.risk import RiskConfig
-from kr_core.strategy import evaluate_candidates
 from kr_core.universe import ETF_TARGETS, LEAD_INDICATORS
 
 from .config import settings
 from .kiwoom import build_kiwoom_client
-from .sample_data import sample_quality, sample_signals, sample_snapshots
+from .live_strategy import live_strategy_payload, sample_strategy_payload
+from .sample_data import sample_snapshots
 
 app = FastAPI(title="kr-quante API", version="0.1.0")
 
@@ -55,33 +56,56 @@ def universe() -> Dict:
     }
 
 
+def strategy_client():
+    return build_kiwoom_client(
+        settings.kiwoom_mode,
+        settings.kiwoom_base_url,
+        settings.kiwoom_app_key,
+        settings.kiwoom_secret_key,
+    )
+
+
+async def strategy_payload() -> Dict:
+    if settings.kiwoom_mode in {"mock", "local", "sample", "fake"} or not settings.kiwoom_app_key:
+        return sample_strategy_payload()
+    return await live_strategy_payload(strategy_client())
+
+
 @app.get("/strategy/today")
-def strategy_today() -> Dict:
-    decisions = evaluate_candidates(sample_signals(), sample_snapshots(), sample_quality())
-    return {
-        "strategy": "Korea Overnight Lead-Lag 3 ETF Strategy v3",
-        "decisions": [asdict(decision) for decision in decisions],
-        "selected": [asdict(decision) for decision in decisions if decision.selected],
-    }
+async def strategy_today() -> Dict:
+    return await strategy_payload()
 
 
 @app.post("/orders/preview")
-def orders_preview(payload: PreviewRequest) -> Dict:
-    decisions = evaluate_candidates(sample_signals(), sample_snapshots(), sample_quality())
-    selected = next((decision for decision in decisions if decision.selected), None)
+async def orders_preview(payload: PreviewRequest) -> Dict:
+    strategy = await strategy_payload()
+    decisions = strategy.get("decisions", [])
+    selected = next((decision for decision in decisions if decision.get("selected")), None)
     if selected is None:
-        return {"status": "no_trade", "reason": "no candidate passed filters", "decisions": [asdict(d) for d in decisions]}
+        return {
+            "status": "no_trade",
+            "reason": "no candidate passed filters",
+            "data_mode": strategy.get("data_mode"),
+            "warnings": strategy.get("warnings", []),
+            "decisions": decisions,
+        }
 
-    snapshots = sample_snapshots()
-    reference_price = payload.reference_prices.get(selected.code) or snapshots[selected.code].price_0905
+    selected_decision = StrategyDecision(**selected)
+    live_snapshots = strategy.get("snapshots", {})
+    sample_snapshot = sample_snapshots().get(selected_decision.code)
+    reference_price = (
+        payload.reference_prices.get(selected_decision.code)
+        or live_snapshots.get(selected_decision.code, {}).get("price_0905")
+        or (sample_snapshot.price_0905 if sample_snapshot else 0)
+    )
     preview = create_order_preview(
-        selected,
+        selected_decision,
         account_equity=payload.account_equity,
         reference_price=reference_price,
         raw_stop_pct=payload.raw_stop_pct,
         risk_config=RiskConfig(risk_per_trade=settings.risk_per_trade),
     )
-    return {"status": "preview", "preview": asdict(preview), "decision": asdict(selected)}
+    return {"status": "preview", "preview": asdict(preview), "decision": selected}
 
 
 @app.post("/orders/submit")

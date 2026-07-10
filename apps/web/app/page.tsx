@@ -23,6 +23,15 @@ type Quote = {
   timestamp: string;
 };
 
+type StrategyPayload = {
+  data_mode?: string;
+  generated_at?: string;
+  entry_window?: string;
+  warnings?: string[];
+  decisions: Decision[];
+  selected: Decision[];
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 const koreanNames: Record<string, string> = {
@@ -45,7 +54,9 @@ const reasonLabels: Record<string, string> = {
   "spread wider than normal": "호가 스프레드 확대",
   "ETF premium too high": "ETF 괴리율 부담",
   "simultaneous VIX and USD/KRW stress": "VIX와 환율 동시 스트레스",
-  "missing opening snapshot": "장초반 데이터 없음"
+  "missing opening snapshot": "장초반 데이터 없음",
+  "outside entry window": "진입 시간 아님",
+  "live data warning": "데이터 경고 확인"
 };
 
 async function fetchJson<T>(path: string, fallback: T): Promise<T> {
@@ -76,6 +87,12 @@ function stateLabel(row: Decision) {
   if (row.selected) {
     return "매수 후보";
   }
+  if (row.no_trade_reasons.includes("outside entry window")) {
+    return "시간 외";
+  }
+  if (row.no_trade_reasons.includes("live data warning")) {
+    return "데이터 확인";
+  }
   return row.no_trade_reasons.length ? "필터 탈락" : "관찰";
 }
 
@@ -83,12 +100,24 @@ function stateClass(row: Decision) {
   if (row.selected) {
     return "badge selected";
   }
+  if (row.no_trade_reasons.includes("outside entry window")) {
+    return "badge neutral";
+  }
+  if (row.no_trade_reasons.includes("live data warning")) {
+    return "badge warning";
+  }
   return row.no_trade_reasons.length ? "badge filtered" : "badge watch";
 }
 
 function primaryReason(row: Decision) {
   if (row.selected) {
     return "조건 통과";
+  }
+  if (row.no_trade_reasons.includes("outside entry window")) {
+    return reasonLabels["outside entry window"];
+  }
+  if (row.no_trade_reasons.includes("live data warning")) {
+    return reasonLabels["live data warning"];
   }
   const reason = row.no_trade_reasons[0];
   return reason ? reasonLabels[reason] || reason : "추가 확인";
@@ -102,13 +131,34 @@ function formatKiwoomTime(value: string) {
   return `${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}`;
 }
 
+function dataModeLabel(mode?: string) {
+  return mode === "live" ? "실제 데이터" : "샘플 데이터";
+}
+
+function formatGeneratedAt(value?: string) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
 export default async function Dashboard() {
-  const strategy = await fetchJson<{ decisions: Decision[]; selected: Decision[] }>(
+  const strategy = await fetchJson<StrategyPayload>(
     "/strategy/today",
     { decisions: [], selected: [] }
   );
   const market = await fetchJson<{ quotes: Quote[] }>("/market/quotes", { quotes: [] });
   const selected = strategy.selected[0];
+  const warningCount = strategy.warnings?.length || 0;
 
   return (
     <main>
@@ -117,18 +167,18 @@ export default async function Dashboard() {
           <p>kr-quante 운영 대시보드</p>
           <h1>국내 ETF 오버나이트 리드-래그</h1>
         </div>
-        <span className="mode">실시간 시세 연결 · 실거래 차단</span>
+        <span className="mode">{dataModeLabel(strategy.data_mode)} · 실거래 차단</span>
       </header>
 
       <section className="summary">
         <div>
           <span>전략</span>
           <strong>3 ETF v3</strong>
-          <small>하루 최대 1회 진입</small>
+          <small>해외 선행 신호 + 국내 장초반 반응</small>
         </div>
         <div>
           <span>진입 시간</span>
-          <strong>09:06-09:12</strong>
+          <strong>{strategy.entry_window || "09:06-09:12"}</strong>
           <small>지정가 주문만 허용</small>
         </div>
         <div>
@@ -140,6 +190,11 @@ export default async function Dashboard() {
           <span>오늘 판단</span>
           <strong>{selected ? selected.code : "거래 없음"}</strong>
           <small>{selected ? displayName(selected.code, selected.name) : "필터 조건 대기"}</small>
+        </div>
+        <div>
+          <span>데이터</span>
+          <strong>{dataModeLabel(strategy.data_mode)}</strong>
+          <small>{warningCount ? `경고 ${warningCount}건` : `계산 ${formatGeneratedAt(strategy.generated_at)}`}</small>
         </div>
       </section>
 

@@ -83,6 +83,18 @@ h2 {
   background: #fff7df;
 }
 
+.badge.warning {
+  border-color: #d59f28;
+  color: #7a5200;
+  background: #fff7df;
+}
+
+.badge.neutral {
+  border-color: #b8c0cc;
+  color: #4b5565;
+  background: #f8fafc;
+}
+
 .badge.watch {
   border-color: #9cb6df;
   color: var(--blue);
@@ -91,7 +103,7 @@ h2 {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin: 12px 0;
 }

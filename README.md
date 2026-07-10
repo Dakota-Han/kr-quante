@@ -57,6 +57,21 @@ If Kiwoom returns an investment-type mismatch for `mockapi.kiwoom.com`, the key
 was likely issued for live investment. In that case use `https://api.kiwoom.com`
 for token and quote checks, but keep `ALLOW_LIVE_TRADING=false`.
 
+## Live Data Mode
+
+When Kiwoom credentials are present, `/strategy/today` uses real market data:
+
+- Overseas lead returns: Yahoo chart daily returns, with FRED fallback for
+  `SP500`, `NASDAQ100`, `VIXCLS`, and `DEXKOUS`.
+- Domestic opening snapshot: Kiwoom daily chart, minute chart, and best bid/ask.
+- Entry guard: even if a candidate scores well, it is blocked outside
+  `09:06-09:12` KST.
+
+The current free overseas source is practical for research and paper/live
+preview, but it is not an institutional data feed. Before increasing size,
+replace or cross-check it with a contracted source such as Alpha Vantage,
+Tiingo, Polygon, Nasdaq Data Link, or a broker-provided market-data feed.
+
 ## Disclaimer
 
 This is trading infrastructure and research code, not financial advice.
