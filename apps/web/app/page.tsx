@@ -1,3 +1,5 @@
+import OrderPanel from "./OrderPanel";
+
 type Decision = {
   code: string;
   name: string;
@@ -30,6 +32,11 @@ type StrategyPayload = {
   warnings?: string[];
   decisions: Decision[];
   selected: Decision[];
+};
+
+type HealthPayload = {
+  live_enabled?: boolean;
+  mode?: string;
 };
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -157,8 +164,10 @@ export default async function Dashboard() {
     { decisions: [], selected: [] }
   );
   const market = await fetchJson<{ quotes: Quote[] }>("/market/quotes", { quotes: [] });
+  const health = await fetchJson<HealthPayload>("/health", {});
   const selected = strategy.selected[0];
   const warningCount = strategy.warnings?.length || 0;
+  const liveTradingText = health.live_enabled ? "실주문 허용" : "실주문 차단";
 
   return (
     <main>
@@ -167,7 +176,7 @@ export default async function Dashboard() {
           <p>kr-quante 운영 대시보드</p>
           <h1>국내 ETF 오버나이트 리드-래그</h1>
         </div>
-        <span className="mode">{dataModeLabel(strategy.data_mode)} · 실거래 차단</span>
+        <span className="mode">{dataModeLabel(strategy.data_mode)} · {liveTradingText}</span>
       </header>
 
       <section className="summary">
@@ -197,6 +206,8 @@ export default async function Dashboard() {
           <small>{warningCount ? `경고 ${warningCount}건` : `계산 ${formatGeneratedAt(strategy.generated_at)}`}</small>
         </div>
       </section>
+
+      <OrderPanel apiBase={apiBase} liveEnabled={Boolean(health.live_enabled)} />
 
       <section className="panel candidates">
         <div className="section-head">

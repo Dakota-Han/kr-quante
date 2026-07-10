@@ -72,6 +72,30 @@ preview, but it is not an institutional data feed. Before increasing size,
 replace or cross-check it with a contracted source such as Alpha Vantage,
 Tiingo, Polygon, Nasdaq Data Link, or a broker-provided market-data feed.
 
+## Live Trading Runbook
+
+Default live orders are blocked by `ALLOW_LIVE_TRADING=false`.
+
+For a real trading day:
+
+1. Start API and web before `09:00` KST.
+2. Open `http://localhost:3000`.
+3. Confirm the dashboard says `실제 데이터`.
+4. During `09:06-09:12`, click `주문 미리보기`.
+5. If a preview exists, check code, quantity, limit price, and risk.
+6. Type an approver name and click `승인 후 지정가 매수`.
+7. Close the position manually with `수동 청산`, or in Kiwoom, before the close.
+
+To allow live order submission, set this only when you are ready to send real
+orders:
+
+```bash
+ALLOW_LIVE_TRADING=true
+```
+
+Do not run unattended automation until fills, position reconciliation, cancel
+handling, and forced EOD exit are implemented.
+
 ## Disclaimer
 
 This is trading infrastructure and research code, not financial advice.

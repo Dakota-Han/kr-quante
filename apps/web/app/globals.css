@@ -197,6 +197,104 @@ td {
   margin-top: 12px;
 }
 
+.trade-panel {
+  margin: 12px 0;
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.trade-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.trade-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: #ffffff;
+  font: inherit;
+}
+
+.trade-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--text);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button.danger {
+  background: #9f1d2d;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.trade-result {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  border: 1px solid #b9dacd;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f0faf6;
+}
+
+.trade-result strong {
+  font-size: 15px;
+}
+
+.trade-result span,
+.trade-result small {
+  color: var(--muted);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.muted-result {
+  border-color: var(--line);
+  background: #f8fafc;
+}
+
+.close-box {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.close-box h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
 .market .table-wrap table {
   min-width: 820px;
 }
@@ -219,7 +317,8 @@ li {
   }
 
   .summary,
-  .grid {
+  .grid,
+  .trade-grid {
     grid-template-columns: 1fr;
   }
 

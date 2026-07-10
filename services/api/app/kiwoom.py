@@ -68,6 +68,22 @@ class KiwoomRestClient:
             "kt10000",
             "/api/dostk/ordr",
             {
+                "dmst_stex_tp": "KRX",
+                "stk_cd": code,
+                "ord_qty": str(quantity),
+                "ord_uv": str(limit_price),
+                "trde_tp": "0",
+                "cond_uv": "",
+                "acnt_no": account_no,
+            },
+        )
+
+    async def sell_limit(self, code: str, quantity: int, limit_price: int, account_no: str) -> Dict[str, Any]:
+        return await self.request_tr(
+            "kt10001",
+            "/api/dostk/ordr",
+            {
+                "dmst_stex_tp": "KRX",
                 "stk_cd": code,
                 "ord_qty": str(quantity),
                 "ord_uv": str(limit_price),
@@ -152,6 +168,17 @@ class MockKiwoomClient:
     async def buy_limit(self, code: str, quantity: int, limit_price: int, account_no: str) -> Dict[str, Any]:
         return {
             "status": "mock_accepted",
+            "side": "BUY",
+            "code": code,
+            "quantity": quantity,
+            "limit_price": limit_price,
+            "account_no": account_no[-4:] if account_no else "mock",
+        }
+
+    async def sell_limit(self, code: str, quantity: int, limit_price: int, account_no: str) -> Dict[str, Any]:
+        return {
+            "status": "mock_accepted",
+            "side": "SELL",
             "code": code,
             "quantity": quantity,
             "limit_price": limit_price,

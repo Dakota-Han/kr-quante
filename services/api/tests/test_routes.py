@@ -36,6 +36,13 @@ class ApiTests(unittest.TestCase):
             )
             self.assertEqual(submit.status_code, 403)
 
+    def test_manual_sell_is_guarded(self):
+        submit = self.client.post(
+            "/orders/sell-limit",
+            json={"code": "091160", "quantity": 1, "limit_price": 150000, "approved_by": "tester"},
+        )
+        self.assertEqual(submit.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

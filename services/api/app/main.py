@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from kr_core.market_data import normalize_kiwoom_quote
@@ -18,6 +19,13 @@ from .live_strategy import live_strategy_payload, sample_strategy_payload
 from .sample_data import sample_snapshots
 
 app = FastAPI(title="kr-quante API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class PreviewRequest(BaseModel):
@@ -30,6 +38,13 @@ class SubmitRequest(BaseModel):
     preview: Dict
     approved_by: str = ""
     order_type: str = "LMT"
+
+
+class SellLimitRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+    quantity: int = Field(gt=0)
+    limit_price: int = Field(gt=0)
+    approved_by: str = ""
 
 
 @app.get("/health")
@@ -93,8 +108,11 @@ async def orders_preview(payload: PreviewRequest) -> Dict:
     selected_decision = StrategyDecision(**selected)
     live_snapshots = strategy.get("snapshots", {})
     sample_snapshot = sample_snapshots().get(selected_decision.code)
+    selected_quote = strategy.get("quotes", {}).get(selected_decision.code, {})
     reference_price = (
         payload.reference_prices.get(selected_decision.code)
+        or selected_quote.get("ask")
+        or selected_quote.get("mid")
         or live_snapshots.get(selected_decision.code, {}).get("price_0905")
         or (sample_snapshot.price_0905 if sample_snapshot else 0)
     )
@@ -136,6 +154,51 @@ async def orders_submit(payload: SubmitRequest) -> Dict:
         settings.kiwoom_secret_key,
     )
     response = await client.buy_limit(
+        code=preview.code,
+        quantity=preview.quantity,
+        limit_price=preview.limit_price,
+        account_no=settings.kiwoom_account_no,
+    )
+    return {"status": "submitted", "kiwoom": response}
+
+
+@app.post("/orders/sell-limit")
+async def orders_sell_limit(payload: SellLimitRequest) -> Dict:
+    from kr_core.models import OrderPreview
+
+    preview = OrderPreview(
+        code=payload.code,
+        side="SELL",
+        quantity=payload.quantity,
+        limit_price=payload.limit_price,
+        position_weight=0.0,
+        max_loss_pct=0.0,
+        stop_pct=0.0,
+        client_order_id=f"manual-sell-{payload.code}",
+        reason="manual end-of-day or risk exit",
+        approved=bool(payload.approved_by),
+    )
+    try:
+        validate_order_submission(
+            [preview],
+            order_type="LMT",
+            config=OrderConfig(
+                allow_live_trading=settings.allow_live_trading,
+                require_manual_approval=settings.require_manual_approval,
+                disallow_market_orders=settings.disallow_market_orders,
+            ),
+            live=settings.kiwoom_mode == "live",
+        )
+    except OrderBlocked as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    client = build_kiwoom_client(
+        settings.kiwoom_mode,
+        settings.kiwoom_base_url,
+        settings.kiwoom_app_key,
+        settings.kiwoom_secret_key,
+    )
+    response = await client.sell_limit(
         code=preview.code,
         quantity=preview.quantity,
         limit_price=preview.limit_price,
