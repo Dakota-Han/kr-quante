@@ -3,9 +3,10 @@ from __future__ import annotations
 import csv
 import io
 import time
+import asyncio
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 from urllib.parse import quote
 
 import httpx
@@ -124,19 +125,24 @@ async def fetch_overseas_returns(symbols: Iterable[str], ttl_seconds: int = 300)
     returns: Dict[str, ReturnPoint] = {}
     warnings: List[str] = []
 
-    for symbol in symbols:
-        try:
-            returns[symbol] = await yahoo.daily_return(symbol)
-            continue
-        except Exception as exc:
-            if symbol not in fred.series_by_symbol:
-                warnings.append(f"{symbol}: Yahoo fetch failed ({exc})")
-                continue
+    semaphore = asyncio.Semaphore(8)
 
-        try:
-            returns[symbol] = await fred.daily_return(symbol)
-        except Exception as exc:
-            warnings.append(f"{symbol}: Yahoo/FRED fetch failed ({exc})")
+    async def fetch_symbol(symbol: str) -> tuple[str, Optional[ReturnPoint], List[str]]:
+        async with semaphore:
+            try:
+                return symbol, await yahoo.daily_return(symbol), []
+            except Exception as exc:
+                if symbol not in fred.series_by_symbol:
+                    return symbol, None, [f"{symbol}: Yahoo fetch failed ({exc})"]
+            try:
+                return symbol, await fred.daily_return(symbol), []
+            except Exception as exc:
+                return symbol, None, [f"{symbol}: Yahoo/FRED fetch failed ({exc})"]
+
+    for symbol, point, symbol_warnings in await asyncio.gather(*(fetch_symbol(symbol) for symbol in symbols)):
+        if point is not None:
+            returns[symbol] = point
+        warnings.extend(symbol_warnings)
 
     _CACHE[symbol_key] = (now, dict(returns), list(warnings))
     return returns, warnings

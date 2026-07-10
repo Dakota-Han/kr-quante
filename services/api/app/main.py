@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime
+from time import monotonic
 from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -16,7 +18,7 @@ from kr_core.universe import ETF_TARGETS, LEAD_INDICATORS
 
 from .config import settings
 from .kiwoom import build_kiwoom_client
-from .live_strategy import live_strategy_payload, sample_strategy_payload
+from .live_strategy import KST, in_entry_window, live_strategy_payload, sample_strategy_payload
 from .sample_data import sample_snapshots
 
 app = FastAPI(title="kr-quante API", version="0.1.0")
@@ -55,6 +57,7 @@ class AutoSettingsRequest(BaseModel):
 
 auto_store = AutoTradeStore()
 auto_trader: Optional[AutoTrader] = None
+_strategy_cache: Optional[tuple[float, Dict]] = None
 
 
 def build_auto_trader() -> AutoTrader:
@@ -118,10 +121,17 @@ def strategy_client():
     )
 
 
-async def strategy_payload() -> Dict:
+async def strategy_payload(force_refresh: bool = False) -> Dict:
+    global _strategy_cache
     if settings.kiwoom_mode in {"mock", "local", "sample", "fake"} or not settings.kiwoom_app_key:
         return sample_strategy_payload()
-    return await live_strategy_payload(strategy_client())
+    ttl_seconds = 5 if in_entry_window(datetime.now(KST)) else 20
+    now = monotonic()
+    if not force_refresh and _strategy_cache and now - _strategy_cache[0] <= ttl_seconds:
+        return _strategy_cache[1]
+    payload = await live_strategy_payload(strategy_client())
+    _strategy_cache = (now, payload)
+    return payload
 
 
 @app.get("/strategy/today")
@@ -131,7 +141,7 @@ async def strategy_today() -> Dict:
 
 @app.post("/orders/preview")
 async def orders_preview(payload: PreviewRequest) -> Dict:
-    strategy = await strategy_payload()
+    strategy = await strategy_payload(force_refresh=True)
     decisions = strategy.get("decisions", [])
     selected = next((decision for decision in decisions if decision.get("selected")), None)
     if selected is None:
@@ -302,6 +312,10 @@ async def market_quote(code: str) -> Dict:
 
 @app.get("/market/quotes")
 async def market_quotes() -> Dict:
+    strategy = await strategy_payload()
+    cached_quotes = strategy.get("quotes")
+    if isinstance(cached_quotes, dict) and cached_quotes:
+        return {"quotes": list(cached_quotes.values())}
     client = build_kiwoom_client(
         settings.kiwoom_mode,
         settings.kiwoom_base_url,

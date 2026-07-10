@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from datetime import datetime, time
 from typing import Dict, Iterable, List, Tuple
@@ -43,6 +44,78 @@ THEME_WEIGHTS = {
         "QQQ": 0.10,
         "^NDX": 0.10,
     },
+    "117460": {
+        "XLE": 0.25,
+        "XOP": 0.18,
+        "OIH": 0.12,
+        "USO": 0.12,
+        "XOM": 0.10,
+        "CVX": 0.10,
+        "COP": 0.08,
+        "^GSPC": 0.05,
+    },
+    "463250": {
+        "ITA": 0.22,
+        "XAR": 0.18,
+        "PPA": 0.14,
+        "LMT": 0.10,
+        "RTX": 0.09,
+        "NOC": 0.08,
+        "RKLB": 0.07,
+        "ARKX": 0.05,
+        "BA": 0.04,
+        "^NDX": 0.03,
+    },
+    "466920": {
+        "BOAT": 0.22,
+        "SEA": 0.18,
+        "LNG": 0.14,
+        "FLNG": 0.10,
+        "STNG": 0.10,
+        "CAT": 0.08,
+        "GE": 0.08,
+        "^GSPC": 0.10,
+    },
+    "445290": {
+        "BOTZ": 0.25,
+        "ROBO": 0.20,
+        "IRBO": 0.12,
+        "NVDA": 0.12,
+        "TSLA": 0.10,
+        "ISRG": 0.08,
+        "TER": 0.05,
+        "^NDX": 0.08,
+    },
+    "433500": {
+        "URA": 0.30,
+        "URNM": 0.20,
+        "CCJ": 0.15,
+        "SMR": 0.12,
+        "UEC": 0.08,
+        "XLU": 0.08,
+        "^GSPC": 0.07,
+    },
+    "364970": {
+        "XBI": 0.25,
+        "IBB": 0.20,
+        "XLV": 0.18,
+        "MRNA": 0.10,
+        "REGN": 0.10,
+        "LLY": 0.10,
+        "^NDX": 0.07,
+    },
+    "471990": {
+        "^SOX": 0.20,
+        "SOXX": 0.18,
+        "SMH": 0.14,
+        "NVDA": 0.12,
+        "AMD": 0.08,
+        "AVGO": 0.08,
+        "ASML": 0.07,
+        "AMAT": 0.06,
+        "LRCX": 0.04,
+        "^NDX": 0.03,
+    },
 }
 
 KOSPI200_PROXY_WEIGHTS = {
@@ -53,26 +126,8 @@ KOSPI200_PROXY_WEIGHTS = {
 }
 
 OVERSEAS_SYMBOLS = sorted(
-    {
-        "SPY",
-        "QQQ",
-        "EWY",
-        "^GSPC",
-        "^NDX",
-        "^VIX",
-        "^SOX",
-        "SOXX",
-        "SMH",
-        "NVDA",
-        "AMD",
-        "MU",
-        "TSM",
-        "TSLA",
-        "LIT",
-        "ALB",
-        "SQM",
-        "USDKRW=X",
-    }
+    set().union(*[set(weights) for weights in THEME_WEIGHTS.values()])
+    | {"SPY", "QQQ", "EWY", "^GSPC", "^NDX", "^VIX", "USDKRW=X"}
 )
 
 
@@ -225,10 +280,20 @@ async def build_opening_snapshots(kiwoom_client) -> tuple[Dict[str, OpeningSnaps
     snapshots: Dict[str, OpeningSnapshot] = {}
     raw_quotes: Dict[str, Dict] = {}
     warnings: List[str] = []
-    for code in ETF_TARGETS:
-        quote_raw = await kiwoom_client.quote(code)
-        daily_raw = await kiwoom_client.daily_bars(code)
-        minute_raw = await kiwoom_client.minute_bars(code)
+    semaphore = asyncio.Semaphore(3)
+
+    async def load_code(code: str):
+        async with semaphore:
+            quote_raw = await kiwoom_client.quote(code)
+            daily_raw = await kiwoom_client.daily_bars(code)
+            minute_raw = await kiwoom_client.minute_bars(code)
+            return code, quote_raw, daily_raw, minute_raw
+
+    for result in await asyncio.gather(*(load_code(code) for code in ETF_TARGETS), return_exceptions=True):
+        if isinstance(result, Exception):
+            warnings.append(str(result))
+            continue
+        code, quote_raw, daily_raw, minute_raw = result
         raw_quotes[code] = asdict(normalize_kiwoom_quote(code, quote_raw))
         try:
             snapshot, snapshot_warnings = opening_snapshot_from_raw(code, daily_raw, minute_raw, quote_raw)
@@ -250,10 +315,25 @@ def build_market_quality(
     theme_0905 = sum(first_five_returns) / len(first_five_returns) if first_five_returns else 0.0
     max_spread_bps = max([quote.get("spread_bps", 0.0) for quote in raw_quotes.values()] or [0.0])
     vix_change = returns.get("^VIX").value if "^VIX" in returns else 0.0
+    vix_level = returns.get("^VIX").latest_close if "^VIX" in returns else 0.0
     usdkrw_change = returns.get("USDKRW=X").value if "USDKRW=X" in returns else 0.0
+    spy = returns.get("SPY").value if "SPY" in returns else 0.0
+    qqq = returns.get("QQQ").value if "QQQ" in returns else 0.0
+    ewy = returns.get("EWY").value if "EWY" in returns else 0.0
+    overseas_equity_shock = min(spy, qqq, ewy)
+    shock_flags = [
+        vix_level >= 28.0,
+        vix_change >= 0.20,
+        usdkrw_change >= 0.012,
+        spy <= -0.022 and qqq <= -0.025,
+        ewy <= -0.030,
+    ]
     return MarketQuality(
         vix_change_z=vix_change / 0.08,
         usdkrw_change_z=usdkrw_change / 0.006,
+        vix_level=vix_level,
+        overseas_equity_shock=overseas_equity_shock,
+        risk_off_score=1.0 if any(shock_flags) else 0.0,
         kospi200_0905_return=kospi200_0905,
         theme_0905_return=theme_0905,
         spread_avg_ratio=max(1.0, max_spread_bps / 5.0),
@@ -264,7 +344,14 @@ def build_market_quality(
 def apply_live_guards(decisions: Iterable[StrategyDecision], now: datetime, warnings: List[str]) -> List[StrategyDecision]:
     guarded: List[StrategyDecision] = []
     outside_entry = not in_entry_window(now)
-    incomplete = bool(warnings)
+    blocking_warning_patterns = (
+        "coverage too low",
+        "not enough Kiwoom",
+        "invalid Kiwoom",
+        "missing Kiwoom",
+        "invalid Kiwoom open",
+    )
+    incomplete = any(any(pattern in warning for pattern in blocking_warning_patterns) for warning in warnings)
     for decision in decisions:
         reasons = list(decision.no_trade_reasons)
         if outside_entry and "outside entry window" not in reasons:

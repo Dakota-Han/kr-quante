@@ -129,6 +129,43 @@ class StrategyTests(unittest.TestCase):
         with self.assertRaises(OrderBlocked):
             validate_order_submission([preview], order_type="LMT", config=OrderConfig())
 
+    def test_auto_order_config_can_allow_diversified_orders(self):
+        previews = []
+        for code in ["091160", "305720"]:
+            previews.append(
+                create_order_preview(
+                    evaluate_candidates(
+                        [FairGapInput(code=code, overseas_theme_signal=0.03, kospi200_night=0.006, nasdaq100=0.012)],
+                        {
+                            code: OpeningSnapshot(
+                                code=code,
+                                previous_close=45000,
+                                open_price=45200,
+                                price_0905=45350,
+                                vwap_0905=45330,
+                                volume_0905=300000,
+                                average_volume_0905=160000,
+                                bid=45340,
+                                ask=45350,
+                                premium_pct=0.0003,
+                                high_since_open=45400,
+                            )
+                        },
+                        MarketQuality(kospi200_0905_return=0.001, theme_0905_return=0.002),
+                        residual_stds={code: 0.004},
+                    )[0],
+                    10_000_000,
+                    45350,
+                    0.01,
+                )
+            )
+        approved = [preview.__class__(**{**preview.__dict__, "approved": True}) for preview in previews]
+        validate_order_submission(
+            approved,
+            order_type="LMT",
+            config=OrderConfig(require_manual_approval=False, max_orders=4),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

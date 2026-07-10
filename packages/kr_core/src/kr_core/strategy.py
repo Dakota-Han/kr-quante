@@ -19,6 +19,9 @@ class StrategyConfig:
     max_premium_pct: float = 0.0015
     battery_max_premium_pct: float = 0.0010
     max_spread_avg_ratio: float = 2.0
+    max_selected: int = 4
+    max_chase_gap: float = 0.015
+    theme_drop_guard: float = -0.018
 
 
 FAIR_GAP_COEFFICIENTS = {
@@ -50,6 +53,76 @@ FAIR_GAP_COEFFICIENTS = {
         "nasdaq100": 0.18,
         "usdkrw": -0.07,
         "vix_change": -0.06,
+        "risk_regime": -0.06,
+    },
+    "117460": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.42,
+        "kospi200_night": 0.08,
+        "ewy": 0.05,
+        "nasdaq100": 0.03,
+        "usdkrw": -0.02,
+        "vix_change": -0.05,
+        "risk_regime": -0.06,
+    },
+    "463250": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.40,
+        "kospi200_night": 0.08,
+        "ewy": 0.03,
+        "nasdaq100": 0.12,
+        "usdkrw": -0.03,
+        "vix_change": -0.04,
+        "risk_regime": -0.05,
+    },
+    "466920": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.35,
+        "kospi200_night": 0.10,
+        "ewy": 0.05,
+        "nasdaq100": 0.02,
+        "usdkrw": 0.04,
+        "vix_change": -0.04,
+        "risk_regime": -0.05,
+    },
+    "445290": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.42,
+        "kospi200_night": 0.08,
+        "ewy": 0.03,
+        "nasdaq100": 0.20,
+        "usdkrw": -0.04,
+        "vix_change": -0.05,
+        "risk_regime": -0.06,
+    },
+    "433500": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.38,
+        "kospi200_night": 0.07,
+        "ewy": 0.03,
+        "nasdaq100": 0.06,
+        "usdkrw": -0.02,
+        "vix_change": -0.04,
+        "risk_regime": -0.05,
+    },
+    "364970": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.35,
+        "kospi200_night": 0.05,
+        "ewy": 0.03,
+        "nasdaq100": 0.12,
+        "usdkrw": -0.02,
+        "vix_change": -0.04,
+        "risk_regime": -0.05,
+    },
+    "471990": {
+        "alpha": 0.0000,
+        "overseas_theme_signal": 0.45,
+        "kospi200_night": 0.10,
+        "ewy": 0.04,
+        "nasdaq100": 0.20,
+        "usdkrw": -0.05,
+        "vix_change": -0.05,
         "risk_regime": -0.06,
     },
 }
@@ -151,16 +224,22 @@ def no_trade_reasons(
 
     if not quality.data_ok:
         reasons.append("data quality check failed")
+    if quality.risk_off_score >= 1.0:
+        reasons.append("global shock guard")
     if fair_gap <= 0:
         reasons.append("fair_gap <= 0")
     if actual_gap_value >= fair_gap:
         reasons.append("actual_gap >= fair_gap")
+    if actual_gap_value >= fair_gap + config.max_chase_gap:
+        reasons.append("open gap too extended")
     if residual <= config.min_gap_residual:
         reasons.append("gap_residual below minimum")
     if residual_z <= (config.battery_min_gap_residual_z if target.stricter else config.min_gap_residual_z):
         reasons.append("gap_residual_z below threshold")
     if zscore(signal.overseas_theme_signal, std=0.01) <= config.min_theme_signal_z:
         reasons.append("overseas theme signal too weak")
+    if signal.overseas_theme_signal <= config.theme_drop_guard:
+        reasons.append("theme overnight shock")
     if score <= (config.battery_min_score if target.stricter else config.min_score):
         reasons.append("score below threshold")
     if five_min < 0:
@@ -205,14 +284,25 @@ def evaluate_candidates(
             )
             continue
         decisions.append(score_candidate(signal, snapshot, quality, residual_stds.get(signal.code, 0.005)))
-    return select_best_candidate(decisions)
+    return select_candidates(decisions)
 
 
-def select_best_candidate(decisions: List[StrategyDecision]) -> List[StrategyDecision]:
+def select_candidates(decisions: List[StrategyDecision], config: StrategyConfig = StrategyConfig()) -> List[StrategyDecision]:
     tradable = [decision for decision in decisions if not decision.no_trade_reasons]
     if not tradable:
         return decisions
-    winner = max(tradable, key=lambda item: item.score)
+    ranked = sorted(tradable, key=lambda item: item.score, reverse=True)
+    selected: List[StrategyDecision] = []
+    used_themes: set[str] = set()
+    for decision in ranked:
+        theme = ETF_TARGETS[decision.code].theme
+        if theme in used_themes:
+            continue
+        selected.append(decision)
+        used_themes.add(theme)
+        if len(selected) >= config.max_selected:
+            break
+    selected_codes = {decision.code for decision in selected}
     return [
         StrategyDecision(
             code=decision.code,
@@ -222,8 +312,12 @@ def select_best_candidate(decisions: List[StrategyDecision]) -> List[StrategyDec
             gap_residual=decision.gap_residual,
             gap_residual_z=decision.gap_residual_z,
             score=decision.score,
-            selected=decision.code == winner.code,
+            selected=decision.code in selected_codes,
             no_trade_reasons=decision.no_trade_reasons,
         )
         for decision in decisions
     ]
+
+
+def select_best_candidate(decisions: List[StrategyDecision]) -> List[StrategyDecision]:
+    return select_candidates(decisions, StrategyConfig(max_selected=1))

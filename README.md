@@ -2,18 +2,26 @@
 
 Domestic Korean ETF quant trading system focused on one strategy:
 
-**Korea Overnight Lead-Lag 3 ETF Strategy v3**
+**Korea Overnight Lead-Lag Multi-Theme ETF Strategy v4**
 
-The system watches three domestic ETFs, estimates the fair opening gap from
-overseas lead indicators, waits for the first 5 minutes of Korean trading, and
-only creates a buy preview when the ETF appears under-reacted and market quality
-filters pass.
+The system watches liquid domestic ETFs across core market beta, semiconductors,
+secondary battery, energy, defense/space, shipbuilding, robotics, nuclear, bio,
+and AI semiconductor equipment. It estimates the fair opening gap from overseas
+lead indicators, waits for the first 5 minutes of Korean trading, and only buys
+themes that appear under-reacted after market-quality and shock filters pass.
 
 ## Strategy Targets
 
 - `069500` KODEX 200
 - `091160` KODEX Semiconductors
 - `305720` KODEX Secondary Battery Industry
+- `117460` KODEX Energy Chemicals
+- `463250` TIGER K-Defense & Space
+- `466920` SOL Shipbuilding TOP3 Plus
+- `445290` KODEX Robot Active
+- `433500` ACE Nuclear TOP10
+- `364970` TIGER Bio TOP10
+- `471990` KODEX AI Semiconductor Equipment
 
 ## Safety Defaults
 
@@ -21,7 +29,9 @@ filters pass.
 - Live trading is disabled by default.
 - Market orders are disallowed.
 - Orders require preview and manual approval.
-- Only one ETF can be selected per day.
+- Auto trading can buy up to four qualified ETFs per day.
+- The auto engine avoids putting more than 40% of the daily budget into one ETF.
+- Severe risk-off conditions block new buys.
 
 ## Quick Start
 
@@ -66,6 +76,8 @@ When Kiwoom credentials are present, `/strategy/today` uses real market data:
 - Domestic opening snapshot: Kiwoom daily chart, minute chart, and best bid/ask.
 - Entry guard: even if a candidate scores well, it is blocked outside
   `09:06-09:12` KST.
+- Shock guard: new buys are blocked when VIX, USD/KRW, SPY, QQQ, or EWY signal
+  severe overnight risk-off conditions.
 
 The current free overseas source is practical for research and paper/live
 preview, but it is not an institutional data feed. Before increasing size,
@@ -108,7 +120,9 @@ Default behavior:
 - Buy automation runs only during `09:06-09:12` KST.
 - End-of-day exit automation runs only during `14:50-15:10` KST.
 - Only limit orders are sent.
-- Only one automatic buy candidate is allowed per day.
+- Up to four automatic buy candidates are allowed per day.
+- Budget is allocated in whole-share lots across qualified candidates, with a
+  per-ETF budget cap.
 - If the daily budget is below one ETF share, no order is sent and the reason
   is written to the log.
 - Live orders are still blocked unless `ALLOW_LIVE_TRADING=true`.

@@ -10,6 +10,7 @@ class EtfTarget:
     code: str
     name: str
     theme: str
+    risk_bucket: str
     max_weight_initial: float
     max_weight_normal: float
     min_stop_pct: float
@@ -49,6 +50,9 @@ class OpeningSnapshot:
 class MarketQuality:
     vix_change_z: float = 0.0
     usdkrw_change_z: float = 0.0
+    vix_level: float = 0.0
+    overseas_equity_shock: float = 0.0
+    risk_off_score: float = 0.0
     kospi200_0905_return: float = 0.0
     theme_0905_return: float = 0.0
     spread_avg_ratio: float = 1.0

@@ -34,6 +34,15 @@ export type AutoStatusPayload = {
       estimated_pnl_krw?: number;
       fill_status?: string;
     } | null;
+    active_positions?: Array<{
+      code: string;
+      name?: string;
+      quantity: number;
+      entry_limit_price: number;
+      exit_limit_price?: number;
+      estimated_pnl_krw?: number;
+      fill_status?: string;
+    }>;
     last_tick_at?: string;
     last_status?: string;
   };
@@ -125,6 +134,11 @@ export default function AutoTradePanel({ apiBase, initialStatus }: AutoTradePane
   const [notice, setNotice] = useState("");
 
   const activePosition = status.state?.active_position;
+  const activePositions = status.state?.active_positions?.length
+    ? status.state.active_positions
+    : activePosition
+      ? [activePosition]
+      : [];
   const liveEnabled = Boolean(status.runtime?.live_enabled);
   const modeText = useMemo(() => {
     if (!enabled) {
@@ -250,14 +264,15 @@ export default function AutoTradePanel({ apiBase, initialStatus }: AutoTradePane
         </div>
       )}
 
-      {activePosition && (
+      {activePositions.length > 0 && (
         <div className="trade-result">
-          <strong>
-            자동 보유 {activePosition.code} {activePosition.quantity}주
-          </strong>
-          <span>진입 지정가 {formatWon(activePosition.entry_limit_price)}</span>
-          {activePosition.exit_limit_price ? <span>청산 지정가 {formatWon(activePosition.exit_limit_price)}</span> : null}
-          <span>상태 {activePosition.fill_status || "submitted_unconfirmed"}</span>
+          <strong>자동 보유 {activePositions.length}종목</strong>
+          {activePositions.map((position) => (
+            <span key={position.code}>
+              {position.code} {position.quantity}주 · 진입 {formatWon(position.entry_limit_price)}
+              {position.exit_limit_price ? ` · 청산 ${formatWon(position.exit_limit_price)}` : ""}
+            </span>
+          ))}
           <small>주문 응답 기준입니다. 체결 확정은 키움 체결조회 연동 후 보강됩니다.</small>
         </div>
       )}

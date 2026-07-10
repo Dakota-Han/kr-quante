@@ -18,6 +18,7 @@ class OrderConfig:
     allow_live_trading: bool = False
     require_manual_approval: bool = True
     disallow_market_orders: bool = True
+    max_orders: int = 1
 
 
 def create_order_preview(
@@ -61,8 +62,8 @@ def validate_order_submission(
         unapproved = [preview.client_order_id for preview in preview_list if not preview.approved]
         if unapproved:
             raise OrderBlocked("manual approval required")
-    if len(preview_list) > 1:
-        raise OrderBlocked("only one ETF order is allowed per day")
+    if len(preview_list) > config.max_orders:
+        raise OrderBlocked(f"too many orders: max {config.max_orders}")
     for preview in preview_list:
         if preview.quantity <= 0:
             raise OrderBlocked("quantity must be positive")

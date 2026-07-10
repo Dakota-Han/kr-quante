@@ -46,16 +46,26 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const koreanNames: Record<string, string> = {
   "069500": "KODEX 200",
   "091160": "KODEX 반도체",
-  "305720": "KODEX 2차전지산업"
+  "305720": "KODEX 2차전지산업",
+  "117460": "KODEX 에너지화학",
+  "463250": "TIGER K방산&우주",
+  "466920": "SOL 조선TOP3플러스",
+  "445290": "KODEX 로봇액티브",
+  "433500": "ACE 원자력TOP10",
+  "364970": "TIGER 바이오TOP10",
+  "471990": "KODEX AI반도체핵심장비"
 };
 
 const reasonLabels: Record<string, string> = {
   "data quality check failed": "데이터 품질 확인 실패",
+  "global shock guard": "글로벌 충격 방어",
   "fair_gap <= 0": "해외 선행 신호 약함",
   "actual_gap >= fair_gap": "시초가에 이미 반영됨",
+  "open gap too extended": "시초 갭 과열",
   "gap_residual below minimum": "남은 괴리 부족",
   "gap_residual_z below threshold": "통계적 괴리 강도 부족",
   "overseas theme signal too weak": "해외 테마 신호 약함",
+  "theme overnight shock": "테마 야간 급락",
   "score below threshold": "종합 점수 미달",
   "first five minute return negative": "장초반 흐름 약세",
   "price broke down after open": "시초가 이후 하락",
@@ -169,6 +179,7 @@ export default async function Dashboard() {
   const health = await fetchJson<HealthPayload>("/health", {});
   const auto = await fetchJson<AutoStatusPayload>("/auto/status", {});
   const selected = strategy.selected[0];
+  const selectedCount = strategy.selected.length;
   const warningCount = strategy.warnings?.length || 0;
   const liveTradingText = health.live_enabled ? "실주문 허용" : "실주문 차단";
 
@@ -203,7 +214,7 @@ export default async function Dashboard() {
         </div>
         <div>
           <span>오늘 판단</span>
-          <strong>{selected ? selected.code : "거래 없음"}</strong>
+          <strong>{selectedCount ? `${selectedCount}종목 후보` : "거래 없음"}</strong>
           <small>{selected ? displayName(selected.code, selected.name) : "필터 조건 대기"}</small>
         </div>
         <div>

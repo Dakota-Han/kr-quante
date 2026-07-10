@@ -2,7 +2,7 @@ from .models import EtfTarget, FairGapInput, MarketQuality, OpeningSnapshot, Ord
 from .market_data import NormalizedQuote, normalize_kiwoom_quote, parse_kiwoom_int
 from .orders import OrderBlocked, create_order_preview, validate_order_submission
 from .risk import RiskConfig, position_weight
-from .strategy import StrategyConfig, evaluate_candidates, select_best_candidate
+from .strategy import StrategyConfig, evaluate_candidates, select_best_candidate, select_candidates
 from .universe import ETF_TARGETS
 
 __all__ = [
@@ -23,5 +23,6 @@ __all__ = [
     "parse_kiwoom_int",
     "position_weight",
     "select_best_candidate",
+    "select_candidates",
     "validate_order_submission",
 ]
