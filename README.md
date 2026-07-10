@@ -53,6 +53,10 @@ Kiwoom REST API docs:
 
 Use mock mode first. Put app keys only in `.env`.
 
+If Kiwoom returns an investment-type mismatch for `mockapi.kiwoom.com`, the key
+was likely issued for live investment. In that case use `https://api.kiwoom.com`
+for token and quote checks, but keep `ALLOW_LIVE_TRADING=false`.
+
 ## Disclaimer
 
 This is trading infrastructure and research code, not financial advice.

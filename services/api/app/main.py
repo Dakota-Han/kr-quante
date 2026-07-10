@@ -128,3 +128,23 @@ async def kiwoom_quote(code: str) -> Dict:
         settings.kiwoom_secret_key,
     )
     return await client.quote(code)
+
+
+@app.get("/kiwoom/token/check")
+async def kiwoom_token_check() -> Dict:
+    client = build_kiwoom_client(
+        settings.kiwoom_mode,
+        settings.kiwoom_base_url,
+        settings.kiwoom_app_key,
+        settings.kiwoom_secret_key,
+    )
+    data = await client.issue_token()
+    return {
+        "mode": settings.kiwoom_mode,
+        "base_url": settings.kiwoom_base_url,
+        "has_token": bool(data.get("token") or data.get("access_token")),
+        "token_type": data.get("token_type"),
+        "expires_dt": data.get("expires_dt"),
+        "return_code": data.get("return_code"),
+        "return_msg": data.get("return_msg"),
+    }

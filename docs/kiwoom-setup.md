@@ -20,7 +20,18 @@ curl http://localhost:8000/health
 curl http://localhost:8000/strategy/today
 ```
 
-7. Live mode requires both:
+7. If your app key was issued for live investment, use the live API domain even
+   while keeping trading disabled:
+
+```text
+KIWOOM_MODE=live
+KIWOOM_BASE_URL=https://api.kiwoom.com
+ALLOW_LIVE_TRADING=false
+```
+
+This allows token and quote checks without enabling live order submission.
+
+8. Live order submission requires both:
 
 ```text
 KIWOOM_MODE=live
@@ -28,3 +39,10 @@ ALLOW_LIVE_TRADING=true
 ```
 
 Do not enable live mode before mock orders and execution logs are verified.
+
+Useful checks:
+
+```bash
+curl http://localhost:8000/kiwoom/token/check
+curl http://localhost:8000/kiwoom/quote/091160
+```

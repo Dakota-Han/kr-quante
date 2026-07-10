@@ -91,6 +91,6 @@ class MockKiwoomClient:
 
 
 def build_kiwoom_client(mode: str, base_url: str, app_key: str, secret_key: str):
-    if mode == "mock" or not app_key or not secret_key:
+    if mode in {"local", "sample", "fake"} or not app_key or not secret_key:
         return MockKiwoomClient()
     return KiwoomRestClient(KiwoomConfig(base_url=base_url, app_key=app_key, secret_key=secret_key))
