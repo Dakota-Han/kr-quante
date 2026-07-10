@@ -1,3 +1,4 @@
+import AutoRefresh from "./AutoRefresh";
 import OrderPanel from "./OrderPanel";
 
 type Decision = {
@@ -176,7 +177,10 @@ export default async function Dashboard() {
           <p>kr-quante 운영 대시보드</p>
           <h1>국내 ETF 오버나이트 리드-래그</h1>
         </div>
-        <span className="mode">{dataModeLabel(strategy.data_mode)} · {liveTradingText}</span>
+        <div className="topbar-status">
+          <span className="mode">{dataModeLabel(strategy.data_mode)} · {liveTradingText}</span>
+          <AutoRefresh generatedAt={strategy.generated_at} />
+        </div>
       </header>
 
       <section className="summary">

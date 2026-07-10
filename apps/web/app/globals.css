@@ -33,6 +33,14 @@ main {
   gap: 16px;
 }
 
+.topbar-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .topbar p,
 .summary span,
 .summary small,
@@ -69,6 +77,41 @@ h2 {
   font-size: 13px;
   font-weight: 750;
   white-space: nowrap;
+}
+
+.refresh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.refresh-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.refresh-dot.pending {
+  background: #d59f28;
+}
+
+.refresh-button {
+  min-height: 24px;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: #eef2f7;
+  color: var(--text);
+  font-size: 12px;
 }
 
 .badge.selected {
